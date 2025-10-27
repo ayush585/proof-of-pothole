@@ -17,6 +17,10 @@ import {
 } from "./id.js";
 import { importKeys, signBytes, verifyBytes, sha256, bufToBase64url } from "./crypto.js";
 import { canonicalize } from "./canonical.js";
+import { buildPackZip } from "./pack.js";
+import { putToIPFS } from "./ipfs.js";
+import { publishPackMeta } from "./firebase.js";
+import { DEFAULT_CHANNEL } from "./config.js";
 
 const inputFile = document.getElementById("file");
 const btnLocate = document.getElementById("btnLocate");
@@ -31,8 +35,10 @@ const nullifierEl = document.getElementById("nullifierToday");
 const copyAnonIdBtn = document.getElementById("copyAnonId");
 const exportIdBtn = document.getElementById("exportId");
 const importIdBtn = document.getElementById("importId");
+const btnPublish = document.getElementById("btnPublish");
 
 const reports = [];
+const photoByReportId = new Map();
 const current = {
   lat: null,
   lng: null,
@@ -43,6 +49,7 @@ const current = {
 let identity = null;
 let keys = null;
 let identityReady = refreshIdentity();
+let isPublishing = false;
 
 initMap();
 
@@ -140,10 +147,63 @@ btnClassify.addEventListener("click", async () => {
   };
 
   reports.push(report);
+  photoByReportId.set(report.id, photoDataURL);
   updateResultBadge(classification);
   addPin({ lat: payload.lat, lng: payload.lng, severity: payload.severity, when: payload.ts });
   appendReportRow(report);
   showToast("Signed report added to this session.");
+});
+
+btnPublish?.addEventListener("click", async () => {
+  await identityReady;
+
+  if (!identity) {
+    showToast("Identity not ready yet. Please wait a moment.");
+    return;
+  }
+  if (!reports.length) {
+    showToast("No signed reports yet.");
+    return;
+  }
+  if (!DEFAULT_CHANNEL || DEFAULT_CHANNEL.startsWith("REPLACE")) {
+    showToast("Set DEFAULT_CHANNEL in config.js before publishing.", 5000);
+    return;
+  }
+  if (isPublishing) {
+    return;
+  }
+
+  isPublishing = true;
+  togglePublishButton(true);
+
+  try {
+    const { blob, packHash, pack } = await buildPackZip({
+      channel: DEFAULT_CHANNEL,
+      uploaderId: identity.anonId,
+      reports,
+      getPhotoByReportId,
+    });
+
+    showToast(`Uploading pack to ${DEFAULT_CHANNEL}...`);
+    const cid = await putToIPFS(blob, `pothole-pack-${Date.now()}.zip`);
+
+    await publishPackMeta({
+      packId: `pack-${Date.now().toString(36)}`,
+      channel: DEFAULT_CHANNEL,
+      cid,
+      packHash,
+      reportCount: pack.reportCount ?? reports.length,
+      uploaderId: identity.anonId,
+    });
+
+    showToast(`Published! CID ${cid.slice(0, 12)}...`, 6000);
+  } catch (err) {
+    console.error("Publish failed", err);
+    showToast(`Publish failed: ${err.message}`, 6000);
+  } finally {
+    togglePublishButton(false);
+    isPublishing = false;
+  }
 });
 
 btnExport.addEventListener("click", () => {
@@ -267,6 +327,16 @@ function downloadFile(name, text, mime = "application/octet-stream") {
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
+}
+
+function togglePublishButton(busy) {
+  if (!btnPublish) return;
+  btnPublish.disabled = busy;
+  btnPublish.textContent = busy ? "Publishing..." : "Publish Pack";
+}
+
+function getPhotoByReportId(reportId) {
+  return photoByReportId.get(reportId) || null;
 }
 
 async function copyText(text) {

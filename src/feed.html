@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ProofOfPothole - Community Feed</title>
+  <link rel="stylesheet" href="./styles.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Community Feed</h1>
+    <a class="btn btn-mini" href="./index.html">Back to Capture</a>
+  </header>
+
+  <main class="wrap feed-layout">
+    <section class="controls">
+      <label for="channel" class="sr-only">Channel</label>
+      <select id="channel" class="select">
+        <option value="">All Channels</option>
+      </select>
+      <button id="btnRefresh" type="button" class="btn">Refresh</button>
+    </section>
+
+    <section class="list">
+      <h2>Packs</h2>
+      <table id="packsTable">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Uploader</th>
+            <th>Channel</th>
+            <th>CID</th>
+            <th>Counts</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="mapwrap">
+      <div id="map" aria-label="Community Map"></div>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="./feed.js"></script>
+</body>
+</html>

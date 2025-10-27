@@ -1,7 +1,8 @@
-const CACHE_NAME = "proof-of-pothole-v1";
+const CACHE_NAME = "proof-of-pothole-v2";
 const CORE_ASSETS = [
   "./",
   "./index.html",
+  "./feed.html",
   "./styles.css",
   "./app.js",
   "./classify.js",
@@ -11,6 +12,12 @@ const CORE_ASSETS = [
   "./crypto.js",
   "./canonical.js",
   "./id.js",
+  "./pack.js",
+  "./ipfs.js",
+  "./firebase.js",
+  "./config.js",
+  "./config.example.js",
+  "./feed.js",
   "./manifest.webmanifest",
   "../public/icon-192.png",
   "../public/icon-512.png",
@@ -20,7 +27,15 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(CORE_ASSETS))
+      .then((cache) =>
+        Promise.allSettled(
+          CORE_ASSETS.map((asset) =>
+            cache.add(asset).catch((err) => {
+              console.warn("Skipping cache asset", asset, err);
+            })
+          )
+        )
+      )
       .then(() => self.skipWaiting())
   );
 });
