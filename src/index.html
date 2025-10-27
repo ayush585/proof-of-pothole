@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ProofOfPothole</title>
+  <link rel="manifest" href="./manifest.webmanifest"/>
+  <meta name="theme-color" content="#0f172a"/>
+  <link rel="preload" href="../public/opencv.min.js" as="script">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <h1>ProofOfPothole</h1>
+  </header>
+
+  <main class="wrap">
+    <section class="controls">
+      <input id="file" type="file" accept="image/*" capture="environment" aria-label="Capture pothole photo"/>
+      <label for="file" class="btn">Take Photo</label>
+      <button id="btnLocate" type="button" class="btn">Use Location</button>
+      <button id="btnClassify" type="button" class="btn accent">Classify</button>
+      <button id="btnExport" type="button" class="btn">Export CSV</button>
+    </section>
+
+    <section class="preview">
+      <img id="preview" alt="Pothole preview"/>
+      <canvas id="canvas" class="hidden"></canvas>
+      <div id="result" class="badge" aria-live="polite"></div>
+    </section>
+
+    <section class="mapwrap">
+      <div id="map" role="application" aria-label="Pothole map"></div>
+    </section>
+
+    <section class="list">
+      <h2>Session Reports</h2>
+      <table id="list" aria-live="polite">
+        <thead>
+          <tr>
+            <th scope="col">Thumb</th>
+            <th scope="col">Severity</th>
+            <th scope="col">Lat</th>
+            <th scope="col">Lng</th>
+            <th scope="col">Time</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="./app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(console.error);
+    }
+  </script>
+</body>
+</html>
