@@ -5,9 +5,10 @@ Browser-only progressive web app for anonymous pothole reporting. This milestone
 ## Features
 - Mobile-first UI with camera capture (`capture="environment"`), in-browser resize to 720px max width, and preview.
 - Geolocation lock with Leaflet map, auto fly-to, and severity-colored markers.
-- Deterministic brightness-based classification stub with placeholder metrics ready for OpenCV integration.
+- OpenCV.js-powered classification pipeline (edge detection, contour analysis) with automatic fallback if the WASM bundle fails.
 - Client-side Ed25519 identity: anon ID, daily nullifier, image hashing, report signing, and inline signature verification badges.
-- Session-scoped report table (in-memory) with CSV export (`potholes.csv`) for quick sharing.
+- Session-scoped report table (in-memory) with CSV export (`potholes.csv`) plus one-tap pack publishing to IPFS and Firestore feed indexing.
+- Standalone verifier (`verify.html`) for judges to paste a CID or drop a ZIP and view totals, signature checks, image hashes, and map pins.
 - PWA manifest + service worker delivering cache-first offline shell (tiles require network unless previously cached).
 
 ## Getting Started
@@ -34,16 +35,17 @@ Browser-only progressive web app for anonymous pothole reporting. This milestone
 ## Architecture Notes
 - All logic lives client-side; no backend dependencies.
 - Modules (`app.js`, `classify.js`, `map.js`, `csv.js`, `utils.js`) are ES modules to keep integration points clean.
-- OpenCV, Ed25519/WebCrypto, IPFS (web3.storage), and Firebase hooks are deferred but signposted with TODOs and modular boundaries.
+- OpenCV, Ed25519/WebCrypto, Web3.Storage, and Firebase Firestore live entirely in-browser through ES modules, keeping integration points modular.
 
 ## Publish & Discover Flow
 1. Capture and classify potholes on the main page (`index.html`). Signed reports accumulate in your session.
 2. Hit **Publish Pack** to bundle the signed reports and resized images into a ZIP pack.
    - The ZIP is uploaded to Web3.Storage and registered in Firestore (`packs/{packId}`) with its CID and hash.
 3. Open **Community Feed** (`feed.html`) to browse packs per channel, import them, and verify signatures + image hashes client-side.
-4. Verified reports are plotted on the Leaflet map. Duplicates (nullifier + timestamp) are skipped automatically.
+4. Judges can jump straight to **Verify Pack** (`verify.html`) to audit any CID or ZIP without touching Firestore.
+5. Verified reports are plotted on the Leaflet map. Duplicates (nullifier + timestamp) are skipped automatically.
 
 ## Next Milestones
-1. Replace `classify.js` stub with real OpenCV.js pipeline (edge detection, contour analysis, severity heuristics).
-2. Build verifier/observer view with expanded dedupe logic and additional map UX polish.
+1. Train thresholds on labeled pothole samples and expose severity calibration controls.
+2. Expand verifier/observer UX with channel filters, bulk downloads, and richer map overlays.
 3. Layer in Ed25519-based pack aggregation, nullifier rotation safeguards, and Firebase channel discovery.

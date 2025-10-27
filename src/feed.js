@@ -2,7 +2,7 @@ import { listPacks } from "./firebase.js";
 import { urlFromCid } from "./ipfs.js";
 import { unzipAndVerifyPack } from "./pack.js";
 import { initMap, addPin, flyTo } from "./map.js";
-import { showToast } from "./utils.js";
+import { toast, retry } from "./utils.js";
 import { verifyBytes, base64urlToBuf } from "./crypto.js";
 import { DEFAULT_CHANNEL } from "./config.js";
 
@@ -52,25 +52,28 @@ async function refreshPacks() {
   } catch (err) {
     console.error("Failed to load packs", err);
     tbody.innerHTML = `<tr><td colspan="6">Could not load packs. Check console.</td></tr>`;
-    showToast("Failed to load feed. Verify Firebase config and network.", 5000);
+    toast("Failed to load feed. Verify Firebase config and network.", "error");
   }
 }
 
 async function importPack(meta) {
   try {
-    showToast("Downloading pack...");
-    const response = await fetch(urlFromCid(meta.cid));
-    if (!response.ok) {
-      throw new Error(`IPFS fetch failed (${response.status})`);
-    }
-    const blob = await response.blob();
+    toast("Downloading pack...");
+    const blob = await retry(async () => {
+      const response = await fetch(urlFromCid(meta.cid));
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.blob();
+    });
 
+    toast("Verifying pack...");
     const { pack, packHash, results } = await unzipAndVerifyPack(blob, {
       verifyReportSig: verifyReportSignature,
     });
 
     if (meta.packHash && meta.packHash !== packHash) {
-      showToast("Pack hash mismatch. Proceed with caution.", 5000);
+      toast("Pack hash mismatch. Proceed with caution.", "warn");
     }
 
     let added = 0;
@@ -104,10 +107,10 @@ async function importPack(meta) {
       flyTo(firstLatLng.lat, firstLatLng.lng, 13);
     }
 
-    showToast(`Imported ${added} pins. Skipped ${skipped}.`, 5000);
+    toast(`Imported ${added} pins. Skipped ${skipped}.`, "success");
   } catch (err) {
     console.error("Import failed", err);
-    showToast(`Import failed: ${err.message}`, 5000);
+    toast(`Import failed: ${err.message}`, "error");
   }
 }
 

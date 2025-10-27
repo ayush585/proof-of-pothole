@@ -1,5 +1,18 @@
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export function toast(message, kind = "info") {
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  el.textContent = message;
+  document.body.appendChild(el);
+  const remove = () => {
+    if (el.parentNode) {
+      el.parentNode.removeChild(el);
+    }
+  };
+  setTimeout(remove, 2400);
+}
+
 export function showToast(message, duration = 3200) {
   const el = document.getElementById("toast");
   if (!el) return;
@@ -59,4 +72,20 @@ export function formatDateKey(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}${month}${day}`;
+}
+
+export async function retry(fn, { attempts = 2, backoff = [500, 1500] } = {}) {
+  let lastError;
+  for (let i = 0; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (i < attempts) {
+        const delay = backoff[Math.min(i, backoff.length - 1)];
+        await sleep(delay);
+      }
+    }
+  }
+  throw lastError;
 }

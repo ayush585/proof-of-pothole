@@ -5,8 +5,10 @@ import {
   createId,
   showToast,
   formatDateKey,
+  toast,
+  retry,
 } from "./utils.js";
-import { classifyImage } from "./classify.js";
+import { classifyImageCV } from "./classify.js";
 import { initMap, addPin, flyTo } from "./map.js";
 import { exportCSV } from "./csv.js";
 import {
@@ -37,7 +39,7 @@ const exportIdBtn = document.getElementById("exportId");
 const importIdBtn = document.getElementById("importId");
 const btnPublish = document.getElementById("btnPublish");
 
-const reports = [];
+const signedReports = [];
 const photoByReportId = new Map();
 const current = {
   lat: null,
@@ -104,7 +106,8 @@ btnClassify.addEventListener("click", async () => {
     return;
   }
 
-  const classification = classifyImage(current.canvas);
+  const classification = await classifyImageCV(current.canvas);
+  toast(`Classified as ${classification.severity}`);
   const photoDataURL = current.photoDataURL || dataURLFromCanvas(current.canvas, 0.9);
   const imageBytes = dataURLToUint8Array(photoDataURL);
   const imageHash = bufToBase64url(await sha256(imageBytes));
@@ -146,7 +149,7 @@ btnClassify.addEventListener("click", async () => {
     verified,
   };
 
-  reports.push(report);
+  signedReports.push(report);
   photoByReportId.set(report.id, photoDataURL);
   updateResultBadge(classification);
   addPin({ lat: payload.lat, lng: payload.lng, severity: payload.severity, when: payload.ts });
@@ -161,12 +164,12 @@ btnPublish?.addEventListener("click", async () => {
     showToast("Identity not ready yet. Please wait a moment.");
     return;
   }
-  if (!reports.length) {
-    showToast("No signed reports yet.");
+  if (!signedReports.length) {
+    toast("No reports to publish", "warn");
     return;
   }
   if (!DEFAULT_CHANNEL || DEFAULT_CHANNEL.startsWith("REPLACE")) {
-    showToast("Set DEFAULT_CHANNEL in config.js before publishing.", 5000);
+    toast("Set DEFAULT_CHANNEL in config.js before publishing.", "warn");
     return;
   }
   if (isPublishing) {
@@ -177,29 +180,37 @@ btnPublish?.addEventListener("click", async () => {
   togglePublishButton(true);
 
   try {
-    const { blob, packHash, pack } = await buildPackZip({
+    toast("Building pack...");
+    const clone = typeof structuredClone === "function"
+      ? structuredClone(signedReports)
+      : JSON.parse(JSON.stringify(signedReports));
+    const { blob, packHash } = await buildPackZip({
       channel: DEFAULT_CHANNEL,
       uploaderId: identity.anonId,
-      reports,
+      reports: clone,
       getPhotoByReportId,
     });
 
-    showToast(`Uploading pack to ${DEFAULT_CHANNEL}...`);
-    const cid = await putToIPFS(blob, `pothole-pack-${Date.now()}.zip`);
+    toast("Uploading to IPFS...");
+    const cid = await retry(() => putToIPFS(blob, `pothole-pack-${Date.now()}.zip`));
 
-    await publishPackMeta({
-      packId: `pack-${Date.now().toString(36)}`,
-      channel: DEFAULT_CHANNEL,
-      cid,
-      packHash,
-      reportCount: pack.reportCount ?? reports.length,
-      uploaderId: identity.anonId,
-    });
+    toast("Publishing feed entry...");
+    const packId = `pack-${Date.now().toString(36)}`;
+    await retry(() =>
+      publishPackMeta({
+        packId,
+        channel: DEFAULT_CHANNEL,
+        cid,
+        packHash,
+        reportCount: signedReports.length,
+        uploaderId: identity.anonId,
+      })
+    );
 
-    showToast(`Published! CID ${cid.slice(0, 12)}...`, 6000);
+    toast(`Published OK. CID ${cid.slice(0, 8)}...`, "success");
   } catch (err) {
     console.error("Publish failed", err);
-    showToast(`Publish failed: ${err.message}`, 6000);
+    toast(`Publish failed: ${err.message}`, "error");
   } finally {
     togglePublishButton(false);
     isPublishing = false;
@@ -207,11 +218,11 @@ btnPublish?.addEventListener("click", async () => {
 });
 
 btnExport.addEventListener("click", () => {
-  if (!reports.length) {
+  if (!signedReports.length) {
     showToast("No reports yet. Capture and classify first.");
     return;
   }
-  exportCSV(reports);
+  exportCSV(signedReports);
   showToast("Exported potholes.csv");
 });
 
@@ -272,13 +283,13 @@ function updateResultBadge({ severity, score }) {
 
 function appendReportRow(report) {
   const indicatorClass = report.verified ? "sig-ok" : "sig-fail";
-  const indicatorIcon = report.verified ? "&#10003;" : "&#10007;";
+  const indicatorText = report.verified ? "OK" : "X";
   const row = document.createElement("tr");
   row.innerHTML = `
     <td><img src="${report.photoDataURL}" alt="Pothole thumbnail"/></td>
     <td>${report.payload.severity}<span class="sig-indicator ${indicatorClass}" title="${
     report.verified ? "Signature verified" : "Signature failed"
-  }">${indicatorIcon}</span></td>
+  }">${indicatorText}</span></td>
     <td>${report.payload.lat.toFixed(5)}</td>
     <td>${report.payload.lng.toFixed(5)}</td>
     <td>${new Date(report.payload.ts).toLocaleTimeString()}</td>

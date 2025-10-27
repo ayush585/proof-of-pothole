@@ -25,6 +25,7 @@
       <button id="btnExport" type="button" class="btn">Export CSV</button>
       <button id="btnPublish" type="button" class="btn">Publish Pack</button>
       <a id="openFeed" class="btn btn-link" href="./feed.html">Open Community Feed</a>
+      <a class="btn btn-link" href="./verify.html">Verify Pack</a>
     </section>
 
     <section class="identity">
@@ -75,6 +76,38 @@
 
   <div id="toast" role="status" aria-live="polite"></div>
 
+  <script>
+    window.loadCV = window.loadCV || function () {
+      return new Promise((resolve, reject) => {
+        if (window.cv && window.cv.Mat) {
+          resolve();
+          return;
+        }
+        const existing = document.querySelector('script[data-opencv]');
+        const attachHandlers = (script) => {
+          script.addEventListener('load', () => {
+            if (window.cv && window.cv.onRuntimeInitialized) {
+              window.cv.onRuntimeInitialized = resolve;
+            } else if (window.cv && window.cv.Mat) {
+              resolve();
+            } else {
+              resolve();
+            }
+          });
+          script.addEventListener('error', () => reject(new Error('OpenCV load failed')));
+        };
+        if (existing) {
+          attachHandlers(existing);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = "../public/opencv.min.js";
+        script.dataset.opencv = "true";
+        attachHandlers(script);
+        document.head.appendChild(script);
+      });
+    };
+  </script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module" src="./app.js"></script>
   <script>

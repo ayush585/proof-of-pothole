@@ -18,6 +18,8 @@ const CORE_ASSETS = [
   "./config.js",
   "./config.example.js",
   "./feed.js",
+  "./verify.html",
+  "./verify.js",
   "./manifest.webmanifest",
   "../public/icon-192.png",
   "../public/icon-512.png",

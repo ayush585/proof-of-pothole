@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ProofOfPothole - Verify Pack</title>
+  <link rel="stylesheet" href="./styles.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Verify Pack</h1>
+    <a class="btn btn-mini" href="./index.html">Back</a>
+  </header>
+
+  <main class="wrap feed-layout">
+    <section class="controls verifier-controls">
+      <input id="cid" class="input" placeholder="Paste IPFS CID e.g. bafy..." aria-label="IPFS CID"/>
+      <button id="btnFetch" type="button" class="btn accent">Verify CID</button>
+      <span class="divider-text">or</span>
+      <label class="btn btn-mini file-label">
+        Load ZIP
+        <input id="zip" type="file" accept=".zip"/>
+      </label>
+    </section>
+
+    <section id="summary" class="summary-grid"></section>
+
+    <section class="list">
+      <h2>Report Results</h2>
+      <table id="results">
+        <thead>
+          <tr>
+            <th>Report</th>
+            <th>Sig</th>
+            <th>Image</th>
+            <th>Dup</th>
+            <th>Severity</th>
+            <th>Lat</th>
+            <th>Lng</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="mapwrap">
+      <div id="map" aria-label="Verification Map"></div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="./verify.js"></script>
+</body>
+</html>

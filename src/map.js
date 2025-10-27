@@ -44,3 +44,9 @@ export function flyTo(lat, lng, zoom = 16) {
   if (!map) return;
   map.flyTo([lat, lng], zoom, { duration: 0.8 });
 }
+
+export function clearPins() {
+  if (layerGroup) {
+    layerGroup.clearLayers();
+  }
+}
