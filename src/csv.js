@@ -7,12 +7,7 @@ export function exportCSV(records) {
 
   const lines = [HEADERS.join(",")];
   for (const record of records) {
-    const row = HEADERS.map((key) => {
-      const value = record[key];
-      if (value == null) return "";
-      if (typeof value === "number") return value.toString();
-      return `"${String(value).replace(/"/g, '""')}"`;
-    });
+    const row = HEADERS.map((key) => resolveValue(record, key));
     lines.push(row.join(","));
   }
 
@@ -25,4 +20,44 @@ export function exportCSV(records) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+function resolveValue(record, key) {
+  const hasPayload = record && record.payload;
+  if (!hasPayload) {
+    return formatValue(record[key]);
+  }
+
+  const payload = record.payload;
+  switch (key) {
+    case "severity":
+      return formatValue(payload.severity);
+    case "lat":
+      return formatValue(payload.lat);
+    case "lng":
+      return formatValue(payload.lng);
+    case "score":
+      return formatValue(payload.score);
+    case "area_px":
+      return formatValue(payload.area_px);
+    case "depth_cm":
+      return formatValue(payload.depth_cm);
+    case "createdAt": {
+      const ts = payload.ts || record.createdAt || record.createdAtISO;
+      if (!ts) return "";
+      if (typeof ts === "number") {
+        return formatValue(new Date(ts).toISOString());
+      }
+      return formatValue(ts);
+    }
+    default:
+      return formatValue(record[key]);
+  }
+}
+
+function formatValue(value) {
+  if (value == null) return "";
+  if (typeof value === "number") return value.toString();
+  const escaped = String(value).replace(/"/g, '""');
+  return `"${escaped}"`;
 }

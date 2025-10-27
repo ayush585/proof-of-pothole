@@ -4,6 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>ProofOfPothole</title>
+  <link rel="apple-touch-icon" href="./icon-192.png"/>
   <link rel="manifest" href="./manifest.webmanifest"/>
   <meta name="theme-color" content="#0f172a"/>
   <link rel="preload" href="../public/opencv.min.js" as="script">
@@ -22,6 +23,25 @@
       <button id="btnLocate" type="button" class="btn">Use Location</button>
       <button id="btnClassify" type="button" class="btn accent">Classify</button>
       <button id="btnExport" type="button" class="btn">Export CSV</button>
+    </section>
+
+    <section class="identity">
+      <h2>Identity</h2>
+      <div class="identity-line">
+        <span>Anon ID</span>
+        <div class="identity-value">
+          <code id="anonId">--</code>
+          <button id="copyAnonId" type="button" class="btn btn-mini" aria-label="Copy anonymous ID">Copy</button>
+        </div>
+      </div>
+      <div class="identity-line">
+        <span>Today's Nullifier</span>
+        <code id="nullifierToday">--</code>
+      </div>
+      <div class="identity-actions">
+        <button id="exportId" type="button" class="btn">Export Identity</button>
+        <button id="importId" type="button" class="btn">Import Identity</button>
+      </div>
     </section>
 
     <section class="preview">

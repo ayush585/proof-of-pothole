@@ -1,7 +1,22 @@
-import { resizeImageToCanvas, dataURLFromCanvas, createId, showToast } from "./utils.js";
+import {
+  resizeImageToCanvas,
+  dataURLFromCanvas,
+  dataURLToUint8Array,
+  createId,
+  showToast,
+  formatDateKey,
+} from "./utils.js";
 import { classifyImage } from "./classify.js";
 import { initMap, addPin, flyTo } from "./map.js";
 import { exportCSV } from "./csv.js";
+import {
+  ensureIdentity,
+  exportIdentity as exportIdentityJSON,
+  importIdentity as importIdentityJSON,
+  deriveNullifier,
+} from "./id.js";
+import { importKeys, signBytes, verifyBytes, sha256, bufToBase64url } from "./crypto.js";
+import { canonicalize } from "./canonical.js";
 
 const inputFile = document.getElementById("file");
 const btnLocate = document.getElementById("btnLocate");
@@ -9,50 +24,27 @@ const btnClassify = document.getElementById("btnClassify");
 const btnExport = document.getElementById("btnExport");
 const preview = document.getElementById("preview");
 const result = document.getElementById("result");
-const canvas = document.getElementById("canvas");
 const tableBody = document.querySelector("#list tbody");
 
-const records = [];
+const anonIdEl = document.getElementById("anonId");
+const nullifierEl = document.getElementById("nullifierToday");
+const copyAnonIdBtn = document.getElementById("copyAnonId");
+const exportIdBtn = document.getElementById("exportId");
+const importIdBtn = document.getElementById("importId");
+
+const reports = [];
 const current = {
   lat: null,
   lng: null,
   canvas: null,
+  photoDataURL: null,
 };
 
+let identity = null;
+let keys = null;
+let identityReady = refreshIdentity();
+
 initMap();
-
-function updateResultBadge({ severity, score }) {
-  result.className = `badge ${severity.toLowerCase()}`;
-  result.textContent = `${severity} (score ${score})`;
-}
-
-function appendRecordRow(record) {
-  const row = document.createElement("tr");
-  row.innerHTML = `
-    <td><img src="${record.photoDataURL}" alt="Pothole thumbnail"/></td>
-    <td>${record.severity}</td>
-    <td>${record.lat.toFixed(5)}</td>
-    <td>${record.lng.toFixed(5)}</td>
-    <td>${new Date(record.createdAt).toLocaleTimeString()}</td>
-  `;
-  tableBody.prepend(row);
-}
-
-function handleLocationSuccess(position) {
-  current.lat = position.coords.latitude;
-  current.lng = position.coords.longitude;
-  showToast("Location locked.");
-  flyTo(current.lat, current.lng);
-}
-
-function handleLocationError(err) {
-  console.warn("Geolocation error", err);
-  if (err.code === err.PERMISSION_DENIED) {
-    showToast("Location denied. Allow in settings and tap again.");
-  } else {
-    showToast("Could not get location. Try again.");
-  }
-}
 
 btnLocate.addEventListener("click", () => {
   if (!navigator.geolocation) {
@@ -60,11 +52,16 @@ btnLocate.addEventListener("click", () => {
     return;
   }
 
-  navigator.geolocation.getCurrentPosition(handleLocationSuccess, handleLocationError, {
-    enableHighAccuracy: true,
-    timeout: 8000,
-    maximumAge: 0,
-  });
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      current.lat = position.coords.latitude;
+      current.lng = position.coords.longitude;
+      flyTo(current.lat, current.lng);
+      showToast("Location locked.");
+    },
+    (err) => handleLocationError(err),
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+  );
 });
 
 inputFile.addEventListener("change", async (event) => {
@@ -76,6 +73,7 @@ inputFile.addEventListener("change", async (event) => {
     const dataUrl = dataURLFromCanvas(current.canvas, 0.9);
     preview.src = dataUrl;
     preview.classList.remove("hidden");
+    current.photoDataURL = dataUrl;
     showToast("Photo ready. Add location and classify.");
   } catch (err) {
     console.error("Image resize failed", err);
@@ -83,7 +81,13 @@ inputFile.addEventListener("change", async (event) => {
   }
 });
 
-btnClassify.addEventListener("click", () => {
+btnClassify.addEventListener("click", async () => {
+  await identityReady;
+
+  if (!identity || !keys) {
+    showToast("Identity not ready yet. Please wait a moment.");
+    return;
+  }
   if (!current.canvas) {
     showToast("Add a photo first.");
     return;
@@ -94,31 +98,199 @@ btnClassify.addEventListener("click", () => {
   }
 
   const classification = classifyImage(current.canvas);
-  const photoDataURL = dataURLFromCanvas(current.canvas, 0.9);
-  const record = {
-    id: createId("pot"),
+  const photoDataURL = current.photoDataURL || dataURLFromCanvas(current.canvas, 0.9);
+  const imageBytes = dataURLToUint8Array(photoDataURL);
+  const imageHash = bufToBase64url(await sha256(imageBytes));
+  const timestampIso = new Date().toISOString();
+
+  const payload = {
+    lat: current.lat,
+    lng: current.lng,
     severity: classification.severity,
     score: classification.score,
     area_px: classification.area_px,
     depth_cm: classification.depth_cm,
-    lat: current.lat,
-    lng: current.lng,
-    createdAt: new Date().toISOString(),
-    photoDataURL,
+    ts: timestampIso,
+  };
+  const media = {
+    img_hash: imageHash,
+    img_mime: "image/jpeg",
   };
 
-  records.push(record);
+  const nullifier = await deriveNullifier(formatDateKey(), identity.recoverySecret);
+  const canonicalBytes = canonicalize({ payload, media });
+  const signature = await signBytes(keys.privateKey, canonicalBytes);
+  const verified = await verifyBytes(keys.publicKey, signature, canonicalBytes);
+
+  if (!verified) {
+    showToast("Signature verification failed.", 4000);
+    return;
+  }
+
+  const report = {
+    id: createId("pot"),
+    pubkey: identity.publicKey,
+    anonId: identity.anonId,
+    nullifier,
+    payload,
+    media,
+    sig: signature,
+    photoDataURL,
+    verified,
+  };
+
+  reports.push(report);
   updateResultBadge(classification);
-  addPin({ lat: record.lat, lng: record.lng, severity: record.severity, when: record.createdAt });
-  appendRecordRow(record);
-  showToast("Report added to this session.");
+  addPin({ lat: payload.lat, lng: payload.lng, severity: payload.severity, when: payload.ts });
+  appendReportRow(report);
+  showToast("Signed report added to this session.");
 });
 
 btnExport.addEventListener("click", () => {
-  if (!records.length) {
+  if (!reports.length) {
     showToast("No reports yet. Capture and classify first.");
     return;
   }
-  exportCSV(records);
+  exportCSV(reports);
   showToast("Exported potholes.csv");
 });
+
+exportIdBtn.addEventListener("click", async () => {
+  await identityReady;
+  const raw = exportIdentityJSON();
+  if (!raw) {
+    showToast("No identity available to export.");
+    return;
+  }
+  let pretty = raw;
+  try {
+    pretty = JSON.stringify(JSON.parse(raw), null, 2);
+  } catch (err) {
+    // keep raw string if parsing fails
+    console.warn("Identity stringify failed", err);
+  }
+  downloadFile("identity.json", pretty, "application/json");
+  showToast("Identity exported.");
+});
+
+importIdBtn.addEventListener("click", () => {
+  const picker = document.createElement("input");
+  picker.type = "file";
+  picker.accept = "application/json";
+  picker.addEventListener("change", async () => {
+    const file = picker.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      await importIdentityJSON(text);
+      identityReady = refreshIdentity();
+      await identityReady;
+      showToast("Identity imported.");
+    } catch (err) {
+      console.error("Identity import failed", err);
+      showToast("Import failed. Check the identity file and try again.", 4000);
+    }
+  });
+  picker.click();
+});
+
+copyAnonIdBtn.addEventListener("click", async () => {
+  await identityReady;
+  if (!identity) return;
+  const copied = await copyText(identity.anonId);
+  if (copied) {
+    showToast("Anon ID copied.");
+  } else {
+    showToast("Copy not supported in this browser.", 4000);
+  }
+});
+
+function updateResultBadge({ severity, score }) {
+  result.className = `badge ${severity.toLowerCase()}`;
+  result.textContent = `${severity} (score ${score})`;
+}
+
+function appendReportRow(report) {
+  const indicatorClass = report.verified ? "sig-ok" : "sig-fail";
+  const indicatorIcon = report.verified ? "&#10003;" : "&#10007;";
+  const row = document.createElement("tr");
+  row.innerHTML = `
+    <td><img src="${report.photoDataURL}" alt="Pothole thumbnail"/></td>
+    <td>${report.payload.severity}<span class="sig-indicator ${indicatorClass}" title="${
+    report.verified ? "Signature verified" : "Signature failed"
+  }">${indicatorIcon}</span></td>
+    <td>${report.payload.lat.toFixed(5)}</td>
+    <td>${report.payload.lng.toFixed(5)}</td>
+    <td>${new Date(report.payload.ts).toLocaleTimeString()}</td>
+  `;
+  tableBody.prepend(row);
+}
+
+function handleLocationError(err) {
+  console.warn("Geolocation error", err);
+  if (err.code === err.PERMISSION_DENIED) {
+    showToast("Location denied. Allow in settings and try again.");
+  } else if (err.code === err.POSITION_UNAVAILABLE) {
+    showToast("Location unavailable. Move to a clearer area or try again.");
+  } else if (err.code === err.TIMEOUT) {
+    showToast("Location request timed out. Try again.");
+  } else {
+    showToast("Could not get location. Try again.");
+  }
+}
+
+async function refreshIdentity() {
+  identity = await ensureIdentity();
+  keys = await importKeys(identity);
+  await updateIdentityUI();
+  return identity;
+}
+
+async function updateIdentityUI() {
+  if (!identity) {
+    anonIdEl.textContent = "--";
+    nullifierEl.textContent = "--";
+    return;
+  }
+  anonIdEl.textContent = identity.anonId;
+  const nullifier = await deriveNullifier(formatDateKey(), identity.recoverySecret);
+  nullifierEl.textContent = nullifier;
+}
+
+function downloadFile(name, text, mime = "application/octet-stream") {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+async function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.warn("Clipboard write failed", err);
+    }
+  }
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const success = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return success;
+  } catch (err) {
+    console.warn("Legacy copy failed", err);
+    return false;
+  }
+}

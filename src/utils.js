@@ -42,3 +42,21 @@ export function dataURLFromCanvas(canvas, quality = 0.85) {
 export function createId(prefix = "r") {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36)}`;
 }
+
+export function dataURLToUint8Array(dataURL) {
+  const parts = dataURL.split(",");
+  const base64Part = parts.length > 1 ? parts[1] : parts[0];
+  const binary = atob(base64Part);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    out[i] = binary.charCodeAt(i);
+  }
+  return out;
+}
+
+export function formatDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}

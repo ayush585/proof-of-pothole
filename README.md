@@ -6,6 +6,7 @@ Browser-only progressive web app for anonymous pothole reporting. This milestone
 - Mobile-first UI with camera capture (`capture="environment"`), in-browser resize to 720px max width, and preview.
 - Geolocation lock with Leaflet map, auto fly-to, and severity-colored markers.
 - Deterministic brightness-based classification stub with placeholder metrics ready for OpenCV integration.
+- Client-side Ed25519 identity: anon ID, daily nullifier, image hashing, report signing, and inline signature verification badges.
 - Session-scoped report table (in-memory) with CSV export (`potholes.csv`) for quick sharing.
 - PWA manifest + service worker delivering cache-first offline shell (tiles require network unless previously cached).
 
@@ -19,6 +20,7 @@ Browser-only progressive web app for anonymous pothole reporting. This milestone
    # Then navigate to http://localhost:3000/src/
    ```
 3. Add the PWA to your home screen for offline testing. Capture a photo, lock location, classify, and export.
+4. Use the Identity section to export your local keys (keep `identity.json` safe) or import an existing identity to resume signing on another browser.
 
 ## Architecture Notes
 - All logic lives client-side; no backend dependencies.
@@ -27,6 +29,6 @@ Browser-only progressive web app for anonymous pothole reporting. This milestone
 
 ## Next Milestones
 1. Replace `classify.js` stub with real OpenCV.js pipeline (edge detection, contour analysis, severity heuristics).
-2. Introduce local identities: Ed25519 key generation & signature flows (WebCrypto) with daily nullifiers.
-3. Wire IPFS uploads via web3.storage and publish discovery metadata (Firestore/Storage).
-4. Build verifier/observer view with dedupe logic and additional map UX polish.
+2. Wire IPFS uploads via web3.storage and publish discovery metadata (Firestore/Storage).
+3. Build verifier/observer view with dedupe logic and additional map UX polish.
+4. Layer in Ed25519-based pack aggregation, nullifier rotation safeguards, and Firebase channel discovery.
