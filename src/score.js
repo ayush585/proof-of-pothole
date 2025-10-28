@@ -1,10 +1,10 @@
-// src/score.js
+﻿// src/score.js
 // One source of truth for pothole scoring & thresholds.
 // Defaults tuned from first calibration pass; adjust only here.
 
 export const SCORE_CFG = {
   w_dark: 0.25, w_area: 0.60, w_edge: 0.15,
-  t_mod: 100, t_crit: 160,
+  t_mod: 105, t_crit: 170,
   normalizeArea: true
 };
 
