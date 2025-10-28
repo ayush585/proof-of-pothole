@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ProofOfPothole - Calibrate</title>
+  <link rel="stylesheet" href="./styles.css"/>
+  <style>
+    .grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    }
+    .card {
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      padding: 8px;
+      background: #0b1220;
+    }
+    .thumb {
+      width: 100%;
+      height: 110px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid #111827;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+  </style>
+  <script>
+    window.loadCV = () => new Promise((resolve, reject) => {
+      if (window.cv && window.cv.Mat) {
+        resolve();
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = "../public/opencv.min.js";
+      script.onload = () => {
+        if (window.cv && typeof window.cv.onRuntimeInitialized === "function") {
+          window.cv.onRuntimeInitialized = resolve;
+        } else if (window.cv && window.cv.Mat) {
+          resolve();
+        } else {
+          resolve();
+        }
+      };
+      script.onerror = () => reject(new Error("Failed to load OpenCV"));
+      document.head.appendChild(script);
+    }).catch((err) => {
+      console.warn(err);
+    });
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Calibration</h1>
+    <a href="./index.html" style="color:#9ca3af">Back</a>
+  </header>
+
+  <main class="wrap">
+    <section class="row">
+      <label for="files" class="sr-only">Select image files</label>
+      <input id="files" type="file" accept="image/*" multiple title="Select image files to calibrate" placeholder="Select image files" aria-label="Select image files"/>
+      <button id="run" type="button">Run Calibration</button>
+      <button id="dl" type="button">Download CSV</button>
+      <span id="prog" style="margin-left:8px;color:#9ca3af"></span>
+    </section>
+
+    <section id="stats" class="row"></section>
+    <section id="grid" class="grid"></section>
+    <canvas id="work" class="hidden"></canvas>
+  </main>
+
+  <script type="module" src="./calibrate.browser.js"></script>
+</body>
+</html>
