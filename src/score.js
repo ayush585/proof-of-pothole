@@ -3,13 +3,14 @@
 // Defaults tuned from first calibration pass; adjust only here.
 
 export const SCORE_CFG = {
-  w_dark: 0.35,   // darkness / shadow weight
-  w_area: 0.50,   // area weight (zoom/size sensitive)
-  w_edge: 0.15,   // edge texture weight
-  t_mod: 85,      // MODERATE threshold
-  t_crit: 130,    // CRITICAL threshold
-  normalizeArea: true,
+  w_dark: 0.35,   // darkness weight
+  w_area: 0.50,   // area weight
+  w_edge: 0.15,   // edge/texture weight
+  t_mod: 85,      // MOD threshold
+  t_crit: 130,    // CRIT threshold
+  normalizeArea: true
 };
+
 
 // meta = { meanDark, area_px, edgeCount, img_w, img_h }
 export function computeScore(meta, cfg = SCORE_CFG) {
