@@ -3,11 +3,8 @@
 // Defaults tuned from first calibration pass; adjust only here.
 
 export const SCORE_CFG = {
-  w_dark: 0.25,   // ↓ darkness (shadows/wet roads less scary)
-  w_area: 0.60,   // ↑ area matters most
-  w_edge: 0.15,   // keep texture the same
-  t_mod: 100,     // MOD starts higher
-  t_crit: 160,    // CRIT requires clearly big/rough holes
+  w_dark: 0.25, w_area: 0.60, w_edge: 0.15,
+  t_mod: 100, t_crit: 160,
   normalizeArea: true
 };
 
@@ -16,6 +13,7 @@ export const SCORE_CFG = {
 // meta = { meanDark, area_px, edgeCount, img_w, img_h }
 export function computeScore(meta, cfg = SCORE_CFG) {
   const meanDark = Number(meta?.meanDark ?? 0);
+  const md = Math.max(0, Math.min(meanDark, 180));
   const area_px = Number(meta?.area_px ?? 0);
   const edgeCount = Number(meta?.edgeCount ?? 0);
   const img_w = Number(meta?.img_w ?? 720);
@@ -29,7 +27,7 @@ export function computeScore(meta, cfg = SCORE_CFG) {
     areaTerm = Math.log10(1 + area_px / 500) * 100;
   }
 
-  const darkTerm = meanDark;
+  const darkTerm = md;
   const edgeTerm = Math.log10(1 + edgeCount) * 60;
 
   const score =
