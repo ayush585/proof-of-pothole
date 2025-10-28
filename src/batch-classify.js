@@ -5,23 +5,40 @@
      // ...
    ]);
 */
-import { scoreFromFeatures } from "./score.js";
+import { computeScore, bucket, SCORE_CFG } from "./score.js";
 import { extractFeatures } from "./classify.js";
+
+function evaluate(features) {
+  const score = computeScore({
+    meanDark: features.meanDark,
+    area_px: features.area_px,
+    edgeCount: features.edgeCount,
+    img_w: features.img_w,
+    img_h: features.img_h,
+  }, SCORE_CFG);
+  const severity = bucket(score, SCORE_CFG);
+  return { score, severity };
+}
 
 async function classifyURL(url) {
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.src = url;
-  await new Promise(r => { img.onload = r; img.onerror = r; });
-  const { area_px, meanDark, edgeCount, depth_cm, mode } = await extractFeatures(img);
-  const { score, severity } = scoreFromFeatures({ area_px, meanDark, edgeCount });
+  await new Promise((resolve) => {
+    img.onload = resolve;
+    img.onerror = resolve;
+  });
+  const features = await extractFeatures(img);
+  const { score, severity } = evaluate(features);
   const row = {
     file: url.split("/").pop(),
-    mode,
-    area_px,
-    meanDark,
-    edgeCount,
-    depth_cm: depth_cm ?? null,
+    mode: features.mode,
+    area_px: features.area_px,
+    meanDark: features.meanDark,
+    edgeCount: features.edgeCount,
+    img_w: features.img_w,
+    img_h: features.img_h,
+    depth_cm: features.depth_cm ?? null,
     score,
     severity,
   };
@@ -31,7 +48,10 @@ async function classifyURL(url) {
 
 export async function batchClassify(urls) {
   const out = [];
-  for (const u of urls) out.push(await classifyURL(u));
+  for (const u of urls) {
+    out.push(await classifyURL(u));
+  }
   return out;
 }
+
 window.batchClassify = batchClassify;

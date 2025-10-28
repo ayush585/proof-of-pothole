@@ -18,10 +18,17 @@ for (const f of fs.readdirSync(folder)) {
   console.log(f, result);
 }
 
-// Write CSV
+const header = ["file", "area_px", "meanDark", "edgeCount", "img_w", "img_h", "score", "severity"];
+const lines = out.map((row) =>
+  header
+    .map((key) => {
+      const value = row[key];
+      return value == null ? "" : value;
+    })
+    .join(","),
+);
 fs.writeFileSync(
-  "./calibration_results.csv",
-  "file,area_px,meanDark,edgeCount,score,severity\n" +
-  out.map(r => `${r.file},${r.area_px},${r.meanDark},${r.edgeCount},${r.score},${r.severity}`).join("\n")
+  "./calibration_results.csv", 
+  `${header.join(",")}\n${lines.join("\n")}`,
 );
 console.log("Saved calibration_results.csv");

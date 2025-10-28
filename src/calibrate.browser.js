@@ -19,8 +19,8 @@ try {
   console.warn("Module worker unavailable", err);
   try {
     worker = new Worker("./calibrate.worker.js");
-  } catch (errClassic) {
-    console.warn("Worker fallback creation failed", errClassic);
+  } catch (classicErr) {
+    console.warn("Fallback worker creation failed", classicErr);
     worker = null;
   }
 }
@@ -92,7 +92,17 @@ dlBtn?.addEventListener("click", () => {
     alert("Run calibration first");
     return;
   }
-  const header = ["file", "area_px", "depth_cm", "score", "severity", "meanDark", "edgeCount"];
+  const header = [
+    "file",
+    "area_px",
+    "depth_cm",
+    "score",
+    "severity",
+    "meanDark",
+    "edgeCount",
+    "img_w",
+    "img_h",
+  ];
   const lines = rows.map((row) => header.map((key) => row[key] ?? "").join(","));
   const csv = [header.join(","), ...lines].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -159,10 +169,10 @@ async function runWithWorker(files) {
             height: job.height,
             dataURL: job.dataURL,
             name: job.name,
-            buffer
-          }
+            buffer,
+          },
         },
-        [buffer]
+        [buffer],
       );
     });
   });
@@ -179,7 +189,7 @@ async function runOnMainThread(files) {
     prog.textContent = `(${i + 1}/${max})`;
     await new Promise((resolve) => setTimeout(resolve, 0));
     const res = await classifyImageCV(canvas);
-    addRow(file.name, dataURL, res);
+    addRow(file.name, dataURL, { ...res, img_w: canvas.width, img_h: canvas.height });
     await new Promise((resolve) => setTimeout(resolve, 35));
   }
 }
@@ -192,7 +202,9 @@ function addRow(name, dataURL, res = {}) {
     score: res.score ?? "",
     severity: res.severity ?? "",
     meanDark: res.meanDark ?? "",
-    edgeCount: res.edgeCount ?? ""
+    edgeCount: res.edgeCount ?? "",
+    img_w: res.img_w ?? "",
+    img_h: res.img_h ?? "",
   };
   rows.push(row);
 
@@ -226,7 +238,7 @@ async function fileToResizedBytes(file, maxWidth = 640) {
     width: canvas.width,
     height: canvas.height,
     dataURL,
-    name: file.name
+    name: file.name,
   };
 }
 

@@ -15,6 +15,8 @@ const CORE_ASSETS = [
   "./pack.js",
   "./ipfs.js",
   "./firebase.js",
+  "./score.js",
+  "./classify-config.js",
   "./config.js",
   "./config.example.js",
   "./feed.js",

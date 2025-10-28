@@ -108,7 +108,18 @@ btnClassify.addEventListener("click", async () => {
   }
 
   const classification = await classifyImageCV(current.canvas);
-  toast(`Classified as ${classification.severity}`);
+  const {
+    severity,
+    score,
+    area_px,
+    depth_cm,
+    meanDark,
+    edgeCount,
+    img_w,
+    img_h,
+  } = classification;
+
+  toast(`Classified as ${severity}`);
   const photoDataURL = current.photoDataURL || dataURLFromCanvas(current.canvas, 0.9);
   const imageBytes = dataURLToUint8Array(photoDataURL);
   const imageHash = bufToBase64url(await sha256(imageBytes));
@@ -117,10 +128,10 @@ btnClassify.addEventListener("click", async () => {
   const payload = {
     lat: current.lat,
     lng: current.lng,
-    severity: classification.severity,
-    score: classification.score,
-    area_px: classification.area_px,
-    depth_cm: classification.depth_cm,
+    severity,
+    score,
+    area_px,
+    depth_cm,
     ts: timestampIso,
   };
   const media = {
@@ -146,6 +157,7 @@ btnClassify.addEventListener("click", async () => {
     payload,
     media,
     sig: signature,
+    metrics: { meanDark, edgeCount, img_w, img_h },
     photoDataURL,
     verified,
   };

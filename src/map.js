@@ -5,6 +5,7 @@ const SEVERITY_COLORS = {
   MINOR: "#22c55e",
   MODERATE: "#f59e0b",
   CRITICAL: "#ef4444",
+  LOW: "#22c55e",
 };
 
 export function initMap({ lat = 22.5726, lng = 88.3639, zoom = 13 } = {}) {
