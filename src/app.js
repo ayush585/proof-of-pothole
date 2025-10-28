@@ -23,6 +23,7 @@ import { buildPackZip } from "./pack.js";
 import { putToIPFS } from "./ipfs.js";
 import { publishPackMeta } from "./firebase.js";
 import { DEFAULT_CHANNEL } from "./config.js";
+import "./batch-classify.js";
 
 const inputFile = document.getElementById("file");
 const btnLocate = document.getElementById("btnLocate");
