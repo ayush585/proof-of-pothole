@@ -3,13 +3,14 @@
 // Defaults tuned from first calibration pass; adjust only here.
 
 export const SCORE_CFG = {
-  w_dark: 0.35,   // darkness weight
-  w_area: 0.50,   // area weight
-  w_edge: 0.15,   // edge/texture weight
-  t_mod: 85,      // MOD threshold
-  t_crit: 130,    // CRIT threshold
+  w_dark: 0.25,   // ↓ darkness (shadows/wet roads less scary)
+  w_area: 0.60,   // ↑ area matters most
+  w_edge: 0.15,   // keep texture the same
+  t_mod: 100,     // MOD starts higher
+  t_crit: 160,    // CRIT requires clearly big/rough holes
   normalizeArea: true
 };
+
 
 
 // meta = { meanDark, area_px, edgeCount, img_w, img_h }
