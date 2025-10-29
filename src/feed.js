@@ -6,7 +6,7 @@ import { initMap, addPin, flyTo } from "./map.js";
 import { toast, retry } from "./utils.js";
 import { verifyBytes, base64urlToBuf } from "./crypto.js";
 import { DEFAULT_CHANNEL } from "./config.js";
-import { DEMO, SAMPLE_CIDS } from "./demo-config.js";
+import { DEMO, SAMPLE_CIDS, DEMO_SAMPLE_CIDS_STORAGE_KEY } from "./demo-config.js";
 
 const channelSel = document.getElementById("channel");
 const btnRefresh = document.getElementById("btnRefresh");
@@ -73,7 +73,8 @@ async function refreshPacks() {
 
 async function importSampleCids() {
   const seen = new Set();
-  for (const cid of SAMPLE_CIDS) {
+  const sampleList = getDemoSampleCidList();
+  for (const cid of sampleList) {
     if (!cid || seen.has(cid)) continue;
     seen.add(cid);
     try {
@@ -83,6 +84,22 @@ async function importSampleCids() {
       console.warn("Sample CID failed", cid, err);
     }
   }
+}
+
+function getDemoSampleCidList() {
+  if (!DEMO) {
+    return SAMPLE_CIDS;
+  }
+  try {
+    const storedRaw = localStorage.getItem(DEMO_SAMPLE_CIDS_STORAGE_KEY);
+    const stored = storedRaw ? JSON.parse(storedRaw) : [];
+    if (Array.isArray(stored)) {
+      return Array.from(new Set([...stored, ...SAMPLE_CIDS].filter(Boolean)));
+    }
+  } catch (err) {
+    console.warn("Failed to read demo sample CIDs", err);
+  }
+  return SAMPLE_CIDS;
 }
 
 async function importPack(meta, options = {}) {

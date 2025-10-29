@@ -23,7 +23,7 @@ import { buildPackZip } from "./pack.js";
 import { putToIPFS } from "./ipfs.js";
 import { publishPackMeta } from "./firebase.js";
 import { DEFAULT_CHANNEL } from "./config.js";
-import { DEMO, DEMO_FAKE_GPS } from "./demo-config.js";
+import { DEMO, DEMO_FAKE_GPS, DEMO_SAMPLE_CIDS_STORAGE_KEY } from "./demo-config.js";
 import "./batch-classify.js";
 
 const inputFile = document.getElementById("file");
@@ -40,6 +40,8 @@ const copyAnonIdBtn = document.getElementById("copyAnonId");
 const exportIdBtn = document.getElementById("exportId");
 const importIdBtn = document.getElementById("importId");
 const btnPublish = document.getElementById("btnPublish");
+const btnSamplePack = document.getElementById("btnSamplePack");
+const sampleButtonDefaultLabel = btnSamplePack?.textContent ?? "Create Sample Pack";
 
 const signedReports = [];
 const photoByReportId = new Map();
@@ -54,6 +56,7 @@ let identity = null;
 let keys = null;
 let identityReady = refreshIdentity();
 let isPublishing = false;
+let isCreatingSample = false;
 
 initMap();
 
@@ -199,7 +202,8 @@ btnPublish?.addEventListener("click", async () => {
     toast("Set DEFAULT_CHANNEL in config.js before publishing.", "warn");
     return;
   }
-  if (isPublishing) {
+  if (isPublishing || isCreatingSample) {
+    showToast("Another pack task is running. Please wait.");
     return;
   }
 
@@ -252,6 +256,24 @@ btnPublish?.addEventListener("click", async () => {
   } finally {
     togglePublishButton(false);
     isPublishing = false;
+  }
+});
+
+btnSamplePack?.addEventListener("click", async () => {
+  if (isPublishing || isCreatingSample) {
+    showToast("Another pack task is running. Please wait.");
+    return;
+  }
+  isCreatingSample = true;
+  toggleSampleButton(true);
+  try {
+    await createSamplePack();
+  } catch (err) {
+    console.error("Sample pack creation failed", err);
+    toast(`Sample pack failed: ${err.message}`, "error");
+  } finally {
+    isCreatingSample = false;
+    toggleSampleButton(false);
   }
 });
 
@@ -388,6 +410,216 @@ function togglePublishButton(busy) {
   if (!btnPublish) return;
   btnPublish.disabled = busy;
   btnPublish.textContent = busy ? "Publishing..." : "Publish Pack";
+}
+
+function toggleSampleButton(busy) {
+  if (!btnSamplePack) {
+    return;
+  }
+  btnSamplePack.disabled = busy;
+  btnSamplePack.textContent = busy ? "Creating..." : sampleButtonDefaultLabel;
+}
+
+async function createSamplePack() {
+  await identityReady;
+
+  if (!identity || !keys) {
+    showToast("Identity not ready yet. Please wait a moment.");
+    return;
+  }
+
+  let reportsSource = signedReports;
+  let photoLookup = (id) => photoByReportId.get(id) || null;
+  let sampleContext = null;
+
+  if (!reportsSource.length) {
+    sampleContext = await synthesizeSampleReports();
+    reportsSource = sampleContext.reports;
+    photoLookup = (id) => sampleContext.photoMap.get(id) || null;
+  }
+
+  if (!reportsSource.length) {
+    toast("No reports available for a sample pack yet.", "warn");
+    return;
+  }
+
+  const reportsClone = typeof structuredClone === "function"
+    ? structuredClone(reportsSource)
+    : JSON.parse(JSON.stringify(reportsSource));
+
+  const channelValue =
+    DEFAULT_CHANNEL && !DEFAULT_CHANNEL.startsWith("REPLACE") ? DEFAULT_CHANNEL : "demo";
+
+  toast("Building sample pack...");
+  const { blob } = await buildPackZip({
+    channel: channelValue,
+    uploaderId: identity.anonId || "demo-user",
+    reports: reportsClone,
+    getPhotoByReportId: (id) => photoLookup(id),
+  });
+
+  toast("Uploading sample pack...");
+  const cid = await retry(() => putToIPFS(blob, `sample-pack-${Date.now()}.zip`));
+  toast(`Sample pack CID: ${cid}`, "success");
+
+  const copied = await copyText(cid);
+  if (copied) {
+    showToast("CID copied to clipboard.");
+  } else {
+    showToast("Sample pack ready. Copy not supported on this device.", 4000);
+  }
+
+  if (DEMO) {
+    persistDemoSampleCid(cid);
+  }
+
+  console.log("[SamplePack] CID", cid);
+  return cid;
+}
+
+async function synthesizeSampleReports() {
+  const baseLat = Number.isFinite(current.lat) ? current.lat : DEMO_FAKE_GPS.lat;
+  const baseLng = Number.isFinite(current.lng) ? current.lng : DEMO_FAKE_GPS.lng;
+  const timestampBase = Date.now();
+  const nullifier = await deriveNullifier(formatDateKey(), identity.recoverySecret);
+
+  const specs = [
+    {
+      severity: "LOW",
+      color: "#22c55e",
+      label: "LOW",
+      score: 72,
+      area_px: 1200,
+      meanDark: 28,
+      edgeCount: 140,
+      depth_cm: 2,
+      offsetLat: 0.0002,
+      offsetLng: 0.0001,
+    },
+    {
+      severity: "MODERATE",
+      color: "#f97316",
+      label: "MOD",
+      score: 118,
+      area_px: 2400,
+      meanDark: 74,
+      edgeCount: 260,
+      depth_cm: 4,
+      offsetLat: -0.0001,
+      offsetLng: 0.0003,
+    },
+    {
+      severity: "CRITICAL",
+      color: "#ef4444",
+      label: "CRIT",
+      score: 168,
+      area_px: 3600,
+      meanDark: 126,
+      edgeCount: 340,
+      depth_cm: 7,
+      offsetLat: -0.0003,
+      offsetLng: -0.0002,
+    },
+  ];
+
+  const photoMap = new Map();
+  const reports = [];
+
+  for (let i = 0; i < specs.length; i += 1) {
+    const spec = specs[i];
+    const id = createId("sample");
+    const dataURL = generateSampleImage(spec.color, spec.label);
+    photoMap.set(id, dataURL);
+
+    const imageBytes = dataURLToUint8Array(dataURL);
+    const imgHash = bufToBase64url(await sha256(imageBytes));
+    const timestampIso = new Date(timestampBase - i * 60_000).toISOString();
+    const lat = baseLat + spec.offsetLat;
+    const lng = baseLng + spec.offsetLng;
+
+    const payload = {
+      lat,
+      lng,
+      severity: spec.severity,
+      score: spec.score,
+      area_px: spec.area_px,
+      depth_cm: spec.depth_cm,
+      ts: timestampIso,
+    };
+
+    const media = {
+      img_hash: imgHash,
+      img_mime: "image/jpeg",
+    };
+
+    const canonicalBytes = canonicalize({ payload, media });
+    const sig = await signBytes(keys.privateKey, canonicalBytes);
+    const verified = await verifyBytes(keys.publicKey, sig, canonicalBytes);
+
+    reports.push({
+      id,
+      pubkey: identity.publicKey,
+      anonId: identity.anonId,
+      nullifier,
+      payload,
+      media,
+      sig,
+      metrics: {
+        meanDark: spec.meanDark,
+        edgeCount: spec.edgeCount,
+        img_w: 720,
+        img_h: 720,
+        area_px: spec.area_px,
+        score: spec.score,
+      },
+      photoDataURL: dataURL,
+      verified,
+    });
+  }
+
+  return { reports, photoMap };
+}
+
+function generateSampleImage(color, label) {
+  const canvas = document.createElement("canvas");
+  const width = 360;
+  const height = 240;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxISEhUTEhIVFRUVFRUVFRUVFRUVFRUVFRUWFhUVFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OGhAQGi0lHyUtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAKgBLAMBIgACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAABf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAdwH/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwB//9k=";
+  }
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "rgba(15, 23, 42, 0.35)";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 40px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, width / 2, height / 2);
+  return canvas.toDataURL("image/jpeg", 0.9);
+}
+
+function persistDemoSampleCid(cid) {
+  if (!DEMO || !cid) {
+    return;
+  }
+  try {
+    const existingRaw = localStorage.getItem(DEMO_SAMPLE_CIDS_STORAGE_KEY);
+    const list = existingRaw ? JSON.parse(existingRaw) : [];
+    const buffer = Array.isArray(list) ? list : [];
+    if (!buffer.includes(cid)) {
+      buffer.unshift(cid);
+      localStorage.setItem(
+        DEMO_SAMPLE_CIDS_STORAGE_KEY,
+        JSON.stringify(buffer.slice(0, 20)),
+      );
+    }
+  } catch (err) {
+    console.warn("Failed to persist demo sample CID", err);
+  }
 }
 
 function getPhotoByReportId(reportId) {

@@ -4,7 +4,7 @@ import { sha256, bufToBase64url, base64urlToBuf, verifyBytes } from "./crypto.js
 import { canonicalize } from "./canonical.js";
 import { initMap, addPin, clearPins, flyTo } from "./map.js";
 import { toast } from "./utils.js";
-import { DEMO, SAMPLE_CIDS } from "./demo-config.js";
+import { DEMO, SAMPLE_CIDS, DEMO_SAMPLE_CIDS_STORAGE_KEY } from "./demo-config.js";
 
 const select = (s) => document.querySelector(s);
 
@@ -214,7 +214,8 @@ switchCidLink?.addEventListener("click", (event) => {
 });
 
 if (DEMO && !getCidFromQuery()) {
-  const sample = SAMPLE_CIDS[0];
+  const samples = getDemoSampleCidList();
+  const sample = samples[0];
   if (sample && cidInput) {
     cidInput.value = sample;
     fetchButton?.click();
@@ -224,4 +225,20 @@ if (DEMO && !getCidFromQuery()) {
 function getCidFromQuery() {
   const params = new URLSearchParams(window.location.search);
   return params.get("cid");
+}
+
+function getDemoSampleCidList() {
+  if (!DEMO) {
+    return SAMPLE_CIDS;
+  }
+  try {
+    const storedRaw = localStorage.getItem(DEMO_SAMPLE_CIDS_STORAGE_KEY);
+    const stored = storedRaw ? JSON.parse(storedRaw) : [];
+    if (Array.isArray(stored)) {
+      return Array.from(new Set([...stored, ...SAMPLE_CIDS].filter(Boolean)));
+    }
+  } catch (err) {
+    console.warn("Failed to read demo sample CIDs", err);
+  }
+  return SAMPLE_CIDS;
 }
