@@ -1,5 +1,4 @@
 import { computeScore, bucket, SCORE_CFG } from "./score.js";
-import { computeScore, bucket, SCORE_CFG } from "./score.js";\nimport { computeScore, bucket, SCORE_CFG } from "./score.js";
 
 let readyPromise = null;
 let loadPromise = null;
@@ -31,6 +30,7 @@ function loadOpenCV(path) {
             return response.text();
           })
           .then((source) => {
+            // eslint-disable-next-line no-eval
             (0, eval)(source);
             resolve();
           })

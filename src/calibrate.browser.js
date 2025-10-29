@@ -1,5 +1,4 @@
 import { classifyImageCV } from "./classify.js";
-import { classifyImageCV } from "./classify.js";
 import { saveCalibrationResult } from "./firebase.js";
 
 const $ = (selector) => document.querySelector(selector);
