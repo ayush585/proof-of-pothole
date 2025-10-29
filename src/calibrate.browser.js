@@ -9,6 +9,9 @@ const grid = $("#grid");
 const stats = $("#stats");
 const prog = $("#prog");
 const work = $("#work");
+const gpsStatus = $("#gpsStatus");
+
+const GPS_TIMEOUT_MS = 5000;
 
 let rows = [];
 let worker = null;
@@ -16,6 +19,7 @@ let workerReadyPromise = null;
 const runStats = new Map();
 const syncQueue = [];
 let syncActive = false;
+let currentRunLocation = null;
 
 try {
   worker = new Worker("./calibrate.worker.js", { type: "module" });
@@ -53,11 +57,11 @@ async function ensureWorkerReady() {
   return workerReadyPromise;
 }
 
-function registerRun(runId, total) {
+function registerRun(runId, total, location = null) {
   if (!runId) {
     return;
   }
-  runStats.set(runId, { total, synced: 0 });
+  runStats.set(runId, { total, synced: 0, location: location || null });
 }
 
 function enqueueSync(item) {
@@ -110,6 +114,51 @@ async function flushSyncQueue() {
   }
 }
 
+async function requestRunLocation(timeoutMs = GPS_TIMEOUT_MS) {
+  if (!navigator.geolocation) {
+    return null;
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(null);
+      }
+    }, timeoutMs);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (!pos?.coords) {
+          resolve(null);
+          return;
+        }
+        const { latitude, longitude } = pos.coords;
+        const lat = Number.isFinite(latitude) ? latitude : null;
+        const lng = Number.isFinite(longitude) ? longitude : null;
+        resolve(lat != null && lng != null ? { lat, lng } : null);
+      },
+      () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(null);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: timeoutMs,
+        maximumAge: 0,
+      },
+    );
+  }).catch(() => null);
+}
+
 
 runBtn?.addEventListener("click", async () => {
   const files = Array.from(filesInp?.files || []);
@@ -118,23 +167,35 @@ runBtn?.addEventListener("click", async () => {
     return;
   }
 
+  const locationPromise = requestRunLocation(GPS_TIMEOUT_MS);
+
   rows = [];
   grid.innerHTML = "";
   stats.textContent = "Preparing...";
   prog.textContent = "";
+  if (gpsStatus) {
+    gpsStatus.textContent = "Acquiring GPS...";
+  }
+
+  currentRunLocation = await locationPromise;
+  if (gpsStatus) {
+    gpsStatus.textContent = currentRunLocation
+      ? "GPS locked \u2713"
+      : "GPS unavailable (skipping)";
+  }
 
   if (worker) {
     try {
-      await runWithWorker(files);
+      await runWithWorker(files, currentRunLocation);
     } catch (err) {
       console.warn("Worker run failed, falling back", err);
       worker.terminate();
       worker = null;
       workerReadyPromise = null;
-      await runOnMainThread(files);
+      await runOnMainThread(files, currentRunLocation);
     }
   } else {
-    await runOnMainThread(files);
+    await runOnMainThread(files, currentRunLocation);
   }
 
   const counts = rows.reduce((acc, row) => {
@@ -175,7 +236,7 @@ dlBtn?.addEventListener("click", () => {
   URL.revokeObjectURL(link.href);
 });
 
-async function runWithWorker(files) {
+async function runWithWorker(files, location = null) {
   const max = Math.min(files.length, 25);
   const inputs = await Promise.all(files.slice(0, max).map((file) => fileToResizedBytes(file, 640)));
   const total = inputs.length;
@@ -189,7 +250,7 @@ async function runWithWorker(files) {
   await ensureWorkerReady();
 
   const runId = `worker-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  registerRun(runId, total);
+  registerRun(runId, total, location);
 
   try {
     await new Promise((resolve) => {
@@ -209,6 +270,7 @@ async function runWithWorker(files) {
               total,
               index: completed,
               timestamp,
+              location,
             });
           }
           if (completed === total) {
@@ -252,7 +314,7 @@ async function runWithWorker(files) {
   }
 }
 
-async function runOnMainThread(files) {
+async function runOnMainThread(files, location = null) {
   stats.textContent = "Running (main thread)...";
   await window.loadCV?.();
 
@@ -262,7 +324,7 @@ async function runOnMainThread(files) {
   }
 
   const runId = `fallback-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  registerRun(runId, max);
+  registerRun(runId, max, location);
 
   for (let i = 0; i < max; i += 1) {
     const file = files[i];
@@ -277,6 +339,7 @@ async function runOnMainThread(files) {
       total: max,
       index: i + 1,
       timestamp,
+      location,
     });
     await new Promise((resolve) => setTimeout(resolve, 35));
   }
@@ -296,6 +359,8 @@ function addRow(name, dataURL, res = {}, context = {}) {
   };
   rows.push(row);
 
+  const location = context.location || currentRunLocation || null;
+
   const syncPayload = {
     fileName: name,
     area_px: res.area_px ?? null,
@@ -307,6 +372,8 @@ function addRow(name, dataURL, res = {}, context = {}) {
     img_h: res.img_h ?? null,
     timestamp: context.timestamp || new Date().toISOString(),
     runId: context.runId || null,
+    lat: location?.lat ?? null,
+    lng: location?.lng ?? null,
   };
 
   enqueueSync({

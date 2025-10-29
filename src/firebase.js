@@ -62,10 +62,82 @@ export async function saveCalibrationResult(record) {
     img_h: record.img_h ?? null,
     timestamp: record.timestamp ?? new Date().toISOString(),
     runId: record.runId ?? null,
+    lat: record.lat ?? null,
+    lng: record.lng ?? null,
     createdAt: serverTimestamp(),
   };
   await setDoc(docRef, payload);
   return docRef.id;
+}
+
+export async function listCalibrationRuns(limitCount = 500) {
+  const db = ensureDb();
+  const colRef = collection(db, "calibrations");
+  let snap;
+  try {
+    snap = await getDocs(query(colRef, orderBy("timestamp", "desc"), limit(limitCount)));
+  } catch (err) {
+    // Fall back to basic query in case an index is missing.
+    snap = await getDocs(query(colRef, limit(limitCount)));
+  }
+  const runs = new Map();
+  for (const docSnap of snap.docs) {
+    const data = docSnap.data();
+    const runId = data.runId;
+    if (!runId) {
+      continue;
+    }
+    const sortDate = coerceDate(data.timestamp) || coerceDate(data.createdAt);
+    const sortValue = sortDate ? sortDate.getTime() : 0;
+    const existing = runs.get(runId);
+    if (!existing || sortValue > existing.sortValue) {
+      runs.set(runId, {
+        runId,
+        latestTimestamp: sortDate ? sortDate.toISOString() : null,
+        sortValue,
+      });
+    }
+  }
+  return Array.from(runs.values())
+    .sort((a, b) => (b.sortValue || 0) - (a.sortValue || 0))
+    .map(({ runId, latestTimestamp }) => ({ runId, latestTimestamp }));
+}
+
+export async function fetchCalibrationsByRun(runId, limitCount = 0) {
+  if (!runId) {
+    throw new Error("runId required");
+  }
+  const db = ensureDb();
+  const colRef = collection(db, "calibrations");
+  let snap;
+  try {
+    const orderedConstraints = [where("runId", "==", runId), orderBy("timestamp", "desc")];
+    if (limitCount > 0) {
+      orderedConstraints.push(limit(limitCount));
+    }
+    snap = await getDocs(query(colRef, ...orderedConstraints));
+  } catch (err) {
+    const fallbackConstraints = [where("runId", "==", runId)];
+    if (limitCount > 0) {
+      fallbackConstraints.push(limit(limitCount));
+    }
+    snap = await getDocs(query(colRef, ...fallbackConstraints));
+  }
+  const items = snap.docs.map((docSnap) => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      ...data,
+    };
+  });
+  items.sort((a, b) => {
+    const aDate = coerceDate(a.timestamp) || coerceDate(a.createdAt);
+    const bDate = coerceDate(b.timestamp) || coerceDate(b.createdAt);
+    const aValue = aDate ? aDate.getTime() : 0;
+    const bValue = bDate ? bDate.getTime() : 0;
+    return bValue - aValue;
+  });
+  return items;
 }
 
 function ensureDb() {
@@ -76,4 +148,26 @@ function ensureDb() {
   appInstance = initializeApp(FIREBASE_CONFIG);
   dbInstance = getFirestore(appInstance);
   return dbInstance;
+}
+
+function coerceDate(value) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value.toDate === "function") {
+    try {
+      const date = value.toDate();
+      return Number.isNaN(date.getTime()) ? null : date;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }

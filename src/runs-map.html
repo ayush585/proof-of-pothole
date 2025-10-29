@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ProofOfPothole - Run Map</title>
+  <link rel="stylesheet" href="./styles.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    .topbar-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .topbar-row a {
+      color: #9ca3af;
+      font-size: 0.95rem;
+      text-decoration: none;
+    }
+
+    .runs-map-layout {
+      grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+      grid-template-areas:
+        "sidebar map";
+      min-height: calc(100vh - 70px);
+    }
+
+    .sidebar {
+      grid-area: sidebar;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sidebar .panel {
+      padding: 16px;
+      background: #0b1320;
+      border: 1px solid #111827;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sidebar .panel h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .sidebar label {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #cbd5f5;
+    }
+
+    .sidebar select {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+      background: #111827;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+    }
+
+    .status-text {
+      font-size: 0.9rem;
+      color: #94a3b8;
+    }
+
+    .filter-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .filter-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+    }
+
+    .filter-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #22c55e;
+    }
+
+    .color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 1px solid #111827;
+      display: inline-block;
+    }
+
+    .counter {
+      font-size: 0.95rem;
+      color: #e5e7eb;
+      font-weight: 600;
+    }
+
+    .mapwrap {
+      grid-area: map;
+      min-height: calc(100vh - 70px);
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      border: 1px solid #111827;
+      overflow: hidden;
+    }
+
+    @media (max-width: 900px) {
+      .runs-map-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+          "sidebar"
+          "map";
+      }
+
+      .mapwrap {
+        min-height: 60vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-row">
+      <h1>Calibration Run Map</h1>
+      <a href="./runs.html">Back to Runs</a>
+    </div>
+  </header>
+
+  <main class="wrap runs-map-layout">
+    <section class="sidebar">
+      <div class="panel" aria-labelledby="controls-title">
+        <h2 id="controls-title">Run Controls</h2>
+        <label for="runSelect">Run</label>
+        <select id="runSelect" aria-label="Select calibration run" disabled>
+          <option>Loading runs...</option>
+        </select>
+        <span id="status" class="status-text" role="status"></span>
+      </div>
+
+      <div class="panel" aria-labelledby="filters-title">
+        <h2 id="filters-title">Filters</h2>
+        <div class="filter-list" id="severityFilters"></div>
+        <div class="counter" id="counter" aria-live="polite">0 markers</div>
+      </div>
+    </section>
+
+    <section class="mapwrap" aria-labelledby="map-title">
+      <h2 id="map-title" class="sr-only">Run Map</h2>
+      <div id="map"></div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="./runs-map.js"></script>
+</body>
+</html>

@@ -30,6 +30,11 @@
       align-items: center;
       flex-wrap: wrap;
     }
+
+    .status-note {
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
   </style>
   <script>
     window.loadCV = () => new Promise((resolve, reject) => {
@@ -68,6 +73,7 @@
       <button id="run" type="button">Run Calibration</button>
       <button id="dl" type="button">Download CSV</button>
       <span id="prog" style="margin-left:8px;color:#9ca3af"></span>
+      <span id="gpsStatus" class="status-note" aria-live="polite"></span>
     </section>
 
     <section id="stats" class="row"></section>
