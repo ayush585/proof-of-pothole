@@ -23,6 +23,7 @@ import { buildPackZip } from "./pack.js";
 import { putToIPFS } from "./ipfs.js";
 import { publishPackMeta } from "./firebase.js";
 import { DEFAULT_CHANNEL } from "./config.js";
+import { DEMO, DEMO_FAKE_GPS } from "./demo-config.js";
 import "./batch-classify.js";
 
 const inputFile = document.getElementById("file");
@@ -58,7 +59,14 @@ initMap();
 
 btnLocate.addEventListener("click", () => {
   if (!navigator.geolocation) {
-    showToast("Geolocation not supported on this device.");
+    if (DEMO) {
+      current.lat = DEMO_FAKE_GPS.lat;
+      current.lng = DEMO_FAKE_GPS.lng;
+      flyTo(current.lat, current.lng);
+      showToast("Demo mode: using sample GPS location.");
+    } else {
+      showToast("Geolocation not supported on this device.");
+    }
     return;
   }
 
@@ -101,6 +109,12 @@ btnClassify.addEventListener("click", async () => {
   if (!current.canvas) {
     showToast("Add a photo first.");
     return;
+  }
+  if ((current.lat == null || current.lng == null) && DEMO) {
+    current.lat = DEMO_FAKE_GPS.lat;
+    current.lng = DEMO_FAKE_GPS.lng;
+    showToast("Demo mode: using sample GPS location.");
+    flyTo(current.lat, current.lng);
   }
   if (current.lat == null || current.lng == null) {
     showToast('Tap "Use Location" to lock position first.');
@@ -197,6 +211,17 @@ btnPublish?.addEventListener("click", async () => {
     const clone = typeof structuredClone === "function"
       ? structuredClone(signedReports)
       : JSON.parse(JSON.stringify(signedReports));
+    if (DEMO) {
+      for (const item of clone) {
+        if (!item?.payload) continue;
+        if (item.payload.lat == null || Number.isNaN(item.payload.lat)) {
+          item.payload.lat = DEMO_FAKE_GPS.lat;
+        }
+        if (item.payload.lng == null || Number.isNaN(item.payload.lng)) {
+          item.payload.lng = DEMO_FAKE_GPS.lng;
+        }
+      }
+    }
     const { blob, packHash } = await buildPackZip({
       channel: DEFAULT_CHANNEL,
       uploaderId: identity.anonId,
@@ -312,15 +337,21 @@ function appendReportRow(report) {
 
 function handleLocationError(err) {
   console.warn("Geolocation error", err);
-  if (err.code === err.PERMISSION_DENIED) {
-    showToast("Location denied. Allow in settings and try again.");
-  } else if (err.code === err.POSITION_UNAVAILABLE) {
-    showToast("Location unavailable. Move to a clearer area or try again.");
-  } else if (err.code === err.TIMEOUT) {
-    showToast("Location request timed out. Try again.");
-  } else {
-    showToast("Could not get location. Try again.");
+  let message = "Could not get location. Try again.";
+  if (err?.code === err?.PERMISSION_DENIED) {
+    message = "Location denied. Allow in settings and try again.";
+  } else if (err?.code === err?.POSITION_UNAVAILABLE) {
+    message = "Location unavailable. Move to a clearer area or try again.";
+  } else if (err?.code === err?.TIMEOUT) {
+    message = "Location request timed out. Try again.";
   }
+  if (DEMO && (current.lat == null || current.lng == null)) {
+    current.lat = DEMO_FAKE_GPS.lat;
+    current.lng = DEMO_FAKE_GPS.lng;
+    flyTo(current.lat, current.lng);
+    message = `${message} Using demo GPS location.`;
+  }
+  showToast(message);
 }
 
 async function refreshIdentity() {

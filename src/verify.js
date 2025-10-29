@@ -4,6 +4,7 @@ import { sha256, bufToBase64url, base64urlToBuf, verifyBytes } from "./crypto.js
 import { canonicalize } from "./canonical.js";
 import { initMap, addPin, clearPins, flyTo } from "./map.js";
 import { toast } from "./utils.js";
+import { DEMO, SAMPLE_CIDS } from "./demo-config.js";
 
 const select = (s) => document.querySelector(s);
 
@@ -12,8 +13,14 @@ const fetchButton = select("#btnFetch");
 const zipInput = select("#zip");
 const summaryEl = select("#summary");
 const tbody = select("#results tbody");
+const demoBanner = select("#demoBanner");
+const switchCidLink = select("#switchCid");
 
 const map = initMap({ zoom: 4 });
+
+if (DEMO && demoBanner) {
+  demoBanner.hidden = false;
+}
 
 fetchButton?.addEventListener("click", async () => {
   const cid = cidInput?.value.trim();
@@ -194,4 +201,27 @@ function summaryItem(label, value) {
 function formatCoord(value) {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return value.toFixed(5);
+}
+switchCidLink?.addEventListener("click", (event) => {
+  event.preventDefault();
+  const current = cidInput?.value.trim() || "";
+  const next = prompt("Enter IPFS CID to verify", current);
+  if (!next) {
+    return;
+  }
+  cidInput.value = next.trim();
+  fetchButton?.click();
+});
+
+if (DEMO && !getCidFromQuery()) {
+  const sample = SAMPLE_CIDS[0];
+  if (sample && cidInput) {
+    cidInput.value = sample;
+    fetchButton?.click();
+  }
+}
+
+function getCidFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("cid");
 }

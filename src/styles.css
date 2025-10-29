@@ -389,3 +389,30 @@ td img {
 .toast.success { border-color: var(--accent); color: var(--fg); }
 .toast.warn { border-color: var(--warn); }
 .toast.error { border-color: var(--crit); }
+
+.demo-banner {
+  padding: 10px 14px;
+  text-align: center;
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.4);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.demo-footer {
+  text-align: center;
+  padding: 12px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.demo-footer .demo-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.demo-footer .demo-link:hover,
+.demo-footer .demo-link:focus-visible {
+  text-decoration: underline;
+}

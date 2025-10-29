@@ -1,8 +1,13 @@
-const CACHE_NAME = "proof-of-pothole-v2";
+const CACHE_VERSION = "ppo-v8";
+const CACHE_NAME = `proof-of-pothole-${CACHE_VERSION}`;
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./feed.html",
+  "./runs.html",
+  "./runs.js",
+  "./runs-map.html",
+  "./runs-map.js",
   "./styles.css",
   "./app.js",
   "./classify.js",
@@ -20,11 +25,13 @@ const CORE_ASSETS = [
   "./config.js",
   "./config.example.js",
   "./feed.js",
+  "./demo-config.js",
   "./verify.html",
   "./verify.js",
   "./calibrate.html",
   "./calibrate.browser.js",
   "./calibrate.worker.js",
+  "./opencv.min.js",
   "./manifest.webmanifest",
   "../public/icon-192.png",
   "../public/icon-512.png",

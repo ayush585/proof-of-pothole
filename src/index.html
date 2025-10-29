@@ -7,7 +7,7 @@
   <link rel="apple-touch-icon" href="./icon-192.png"/>
   <link rel="manifest" href="./manifest.webmanifest"/>
   <meta name="theme-color" content="#0f172a"/>
-  <link rel="preload" href="../public/opencv.min.js" as="script">
+  <link rel="preload" href="./opencv.min.js" as="script">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="./styles.css"/>
 </head>
@@ -24,6 +24,7 @@
       <button id="btnClassify" type="button" class="btn accent">Classify</button>
       <button id="btnExport" type="button" class="btn">Export CSV</button>
       <button id="btnPublish" type="button" class="btn">Publish Pack</button>
+      <button id="btnSamplePack" type="button" class="btn">Create Sample Pack</button>
       <a id="openFeed" class="btn btn-link" href="./feed.html">Open Community Feed</a>
       <a class="btn btn-link" href="./verify.html">Verify Pack</a>
     </section>
@@ -101,7 +102,7 @@
           return;
         }
         const script = document.createElement('script');
-        script.src = "../public/opencv.min.js";
+        script.src = "./opencv.min.js";
         script.dataset.opencv = "true";
         attachHandlers(script);
         document.head.appendChild(script);

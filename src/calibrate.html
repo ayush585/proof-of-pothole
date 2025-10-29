@@ -37,27 +37,38 @@
     }
   </style>
   <script>
-    window.loadCV = () => new Promise((resolve, reject) => {
-      if (window.cv && window.cv.Mat) {
-        resolve();
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = "../public/opencv.min.js";
-      script.onload = () => {
-        if (window.cv && typeof window.cv.onRuntimeInitialized === "function") {
-          window.cv.onRuntimeInitialized = resolve;
-        } else if (window.cv && window.cv.Mat) {
-          resolve();
-        } else {
+    window.loadCV = () =>
+      new Promise((resolve) => {
+        try {
+          if (window.cv && window.cv.Mat) {
+            resolve();
+            return;
+          }
+          const script = document.createElement("script");
+          script.src = "./opencv.min.js"; // file must live in /src/
+          script.onload = () => {
+            if (window.cv && typeof window.cv.onRuntimeInitialized === "function") {
+              const original = window.cv.onRuntimeInitialized;
+              window.cv.onRuntimeInitialized = () => {
+                if (typeof original === "function") {
+                  try {
+                    original();
+                  } catch (err) {
+                    // ignore
+                  }
+                }
+                resolve();
+              };
+            } else {
+              resolve();
+            }
+          };
+          script.onerror = () => resolve();
+          document.head.appendChild(script);
+        } catch (err) {
           resolve();
         }
-      };
-      script.onerror = () => reject(new Error("Failed to load OpenCV"));
-      document.head.appendChild(script);
-    }).catch((err) => {
-      console.warn(err);
-    });
+      });
   </script>
 </head>
 <body>

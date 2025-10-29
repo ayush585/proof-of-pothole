@@ -22,15 +22,9 @@ let syncActive = false;
 let currentRunLocation = null;
 
 try {
-  worker = new Worker("./calibrate.worker.js", { type: "module" });
-} catch (err) {
-  console.warn("Module worker unavailable", err);
-  try {
-    worker = new Worker("./calibrate.worker.js");
-  } catch (classicErr) {
-    console.warn("Fallback worker creation failed", classicErr);
-    worker = null;
-  }
+  worker = new Worker("./calibrate.worker.js"); // classic worker (best mobile compat over HTTP)
+} catch (_) {
+  worker = null;
 }
 
 async function ensureWorkerReady() {
@@ -51,7 +45,7 @@ async function ensureWorkerReady() {
         }
       };
       worker.addEventListener("message", onMessage);
-      worker.postMessage({ type: "init", payload: { opencvPath: "../public/opencv.min.js" } });
+      worker.postMessage({ type: "init" });
     });
   }
   return workerReadyPromise;
@@ -160,55 +154,58 @@ async function requestRunLocation(timeoutMs = GPS_TIMEOUT_MS) {
 }
 
 
-runBtn?.addEventListener("click", async () => {
-  const files = Array.from(filesInp?.files || []);
-  if (!files.length) {
-    alert("Select images first");
-    return;
-  }
+if (runBtn) {
+  runBtn.onclick = async () => {
+    const files = Array.from(filesInp?.files || []);
+    if (!files.length) {
+      alert("Select images first");
+      return;
+    }
 
-  const locationPromise = requestRunLocation(GPS_TIMEOUT_MS);
+    const locationPromise = requestRunLocation(GPS_TIMEOUT_MS);
 
-  rows = [];
-  grid.innerHTML = "";
-  stats.textContent = "Preparing...";
-  prog.textContent = "";
-  if (gpsStatus) {
-    gpsStatus.textContent = "Acquiring GPS...";
-  }
+    rows = [];
+    grid.innerHTML = "";
+    stats.textContent = "Running...";
+    prog.textContent = "";
+    if (gpsStatus) {
+      gpsStatus.textContent = "Acquiring GPS...";
+    }
 
-  currentRunLocation = await locationPromise;
-  if (gpsStatus) {
-    gpsStatus.textContent = currentRunLocation
-      ? "GPS locked \u2713"
-      : "GPS unavailable (skipping)";
-  }
+    currentRunLocation = await locationPromise;
+    if (gpsStatus) {
+      gpsStatus.textContent = currentRunLocation
+        ? "GPS locked \u2713"
+        : "GPS unavailable (skipping)";
+    }
 
-  if (worker) {
-    try {
-      await runWithWorker(files, currentRunLocation);
-    } catch (err) {
-      console.warn("Worker run failed, falling back", err);
-      worker.terminate();
-      worker = null;
-      workerReadyPromise = null;
+    if (worker) {
+      try {
+        await runWithWorker(files, currentRunLocation);
+      } catch (err) {
+        console.warn("Worker run failed, falling back", err);
+        worker.terminate();
+        worker = null;
+        workerReadyPromise = null;
+        alert("Classifier worker couldn\u2019t start on this device.\nFalling back to on-page (still fine for 10\u201315 images).");
+        await runOnMainThread(files, currentRunLocation);
+      }
+    } else {
+      alert("Classifier worker couldn\u2019t start on this device.\nFalling back to on-page (still fine for 10\u201315 images).");
       await runOnMainThread(files, currentRunLocation);
     }
-  } else {
-    await runOnMainThread(files, currentRunLocation);
-  }
 
-  const counts = rows.reduce((acc, row) => {
-    const key = row.severity || "UNKNOWN";
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-  const summary = Object.entries(counts)
-    .map(([k, v]) => `${k}:${v}`)
-    .join("  ");
-  stats.textContent = `Done - ${rows.length} images${summary ? ` - ${summary}` : ""}`;
-  prog.textContent = "";
-});
+    const counts = rows.reduce((a, r) => {
+      const key = r.severity || "UNKNOWN";
+      a[key] = (a[key] || 0) + 1;
+      return a;
+    }, {});
+    stats.textContent = `Done \u2022 ${rows.length} images \u2022 ${Object.entries(counts)
+      .map(([k, v]) => `${k}:${v}`)
+      .join("  ")}`;
+    prog.textContent = "";
+  };
+}
 
 dlBtn?.addEventListener("click", () => {
   if (!rows.length) {
@@ -301,7 +298,7 @@ async function runWithWorker(files, location = null) {
               height: job.height,
               dataURL: job.dataURL,
               name: job.name,
-              buffer,
+              bytes: buffer,
             },
           },
           [buffer],

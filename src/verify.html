@@ -13,6 +13,8 @@
     <a class="btn btn-mini" href="./index.html">Back</a>
   </header>
 
+  <div id="demoBanner" class="demo-banner" role="status" aria-live="polite" hidden>Demo Mode - Sample data only</div>
+
   <main class="wrap feed-layout">
     <section class="controls verifier-controls">
       <input id="cid" class="input" placeholder="Paste IPFS CID e.g. bafy..." aria-label="IPFS CID"/>
@@ -48,6 +50,10 @@
     <section class="mapwrap">
       <div id="map" aria-label="Verification Map"></div>
     </section>
+
+    <footer class="demo-footer">
+      <a id="switchCid" class="demo-link" href="#">Switch CID</a>
+    </footer>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

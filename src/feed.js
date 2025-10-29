@@ -1,14 +1,17 @@
 import { listPacks } from "./firebase.js";
+import { listPacks } from "./firebase.js";
 import { urlFromCid } from "./ipfs.js";
 import { unzipAndVerifyPack } from "./pack.js";
 import { initMap, addPin, flyTo } from "./map.js";
 import { toast, retry } from "./utils.js";
 import { verifyBytes, base64urlToBuf } from "./crypto.js";
 import { DEFAULT_CHANNEL } from "./config.js";
+import { DEMO, SAMPLE_CIDS } from "./demo-config.js";
 
 const channelSel = document.getElementById("channel");
 const btnRefresh = document.getElementById("btnRefresh");
 const tbody = document.querySelector("#packsTable tbody");
+const demoBanner = document.getElementById("demoBanner");
 
 const channelOptions = Array.from(new Set([DEFAULT_CHANNEL, "kolkata-south", "kolkata-north", "delhi-cp", "global"]));
 populateChannels(channelOptions);
@@ -17,7 +20,19 @@ const map = initMap({ zoom: 4 });
 const publicKeyCache = new Map();
 const globalDedupe = new Set();
 
+if (DEMO && demoBanner) {
+  demoBanner.hidden = false;
+}
+
 await refreshPacks();
+
+if (DEMO) {
+  try {
+    await importSampleCids();
+  } catch (err) {
+    console.warn("Demo CID import failed", err);
+  }
+}
 
 btnRefresh?.addEventListener("click", refreshPacks);
 channelSel?.addEventListener("change", refreshPacks);
@@ -56,9 +71,24 @@ async function refreshPacks() {
   }
 }
 
-async function importPack(meta) {
+async function importSampleCids() {
+  const seen = new Set();
+  for (const cid of SAMPLE_CIDS) {
+    if (!cid || seen.has(cid)) continue;
+    seen.add(cid);
+    try {
+      const meta = { cid };
+      await importPack(meta, { silent: true });
+    } catch (err) {
+      console.warn("Sample CID failed", cid, err);
+    }
+  }
+}
+
+async function importPack(meta, options = {}) {
+  const { silent = false } = options;
   try {
-    toast("Downloading pack...");
+    if (!silent) toast("Downloading pack...");
     const blob = await retry(async () => {
       const response = await fetch(urlFromCid(meta.cid));
       if (!response.ok) {
@@ -67,12 +97,12 @@ async function importPack(meta) {
       return response.blob();
     });
 
-    toast("Verifying pack...");
+    if (!silent) toast("Verifying pack...");
     const { pack, packHash, results } = await unzipAndVerifyPack(blob, {
       verifyReportSig: verifyReportSignature,
     });
 
-    if (meta.packHash && meta.packHash !== packHash) {
+    if (meta.packHash && meta.packHash !== packHash && !silent) {
       toast("Pack hash mismatch. Proceed with caution.", "warn");
     }
 
@@ -107,10 +137,11 @@ async function importPack(meta) {
       flyTo(firstLatLng.lat, firstLatLng.lng, 13);
     }
 
-    toast(`Imported ${added} pins. Skipped ${skipped}.`, "success");
+    if (!silent) toast(`Imported ${added} pins. Skipped ${skipped}.`, "success");
   } catch (err) {
     console.error("Import failed", err);
-    toast(`Import failed: ${err.message}`, "error");
+    if (!silent) toast(`Import failed: ${err.message}`, "error");
+    throw err;
   }
 }
 
