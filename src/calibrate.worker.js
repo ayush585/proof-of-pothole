@@ -1,4 +1,5 @@
 import { computeScore, bucket, SCORE_CFG } from "./score.js";
+import { computeScore, bucket, SCORE_CFG } from "./score.js";\nimport { computeScore, bucket, SCORE_CFG } from "./score.js";
 
 let readyPromise = null;
 let loadPromise = null;

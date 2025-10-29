@@ -1,4 +1,6 @@
 import { classifyImageCV } from "./classify.js";
+import { classifyImageCV } from "./classify.js";
+import { saveCalibrationResult } from "./firebase.js";
 
 const $ = (selector) => document.querySelector(selector);
 const filesInp = $("#files");
@@ -12,6 +14,9 @@ const work = $("#work");
 let rows = [];
 let worker = null;
 let workerReadyPromise = null;
+const runStats = new Map();
+const syncQueue = [];
+let syncActive = false;
 
 try {
   worker = new Worker("./calibrate.worker.js", { type: "module" });
@@ -48,6 +53,64 @@ async function ensureWorkerReady() {
   }
   return workerReadyPromise;
 }
+
+function registerRun(runId, total) {
+  if (!runId) {
+    return;
+  }
+  runStats.set(runId, { total, synced: 0 });
+}
+
+function enqueueSync(item) {
+  syncQueue.push(item);
+  scheduleFlush();
+}
+
+function scheduleFlush() {
+  if (syncActive) {
+    return;
+  }
+  syncActive = true;
+  setTimeout(() => {
+    flushSyncQueue().catch((err) => {
+      console.warn("Calibration sync batch failed", err);
+      syncActive = false;
+      if (syncQueue.length) {
+        scheduleFlush();
+      }
+    });
+  }, 0);
+}
+
+async function flushSyncQueue() {
+  while (syncQueue.length) {
+    const item = syncQueue.shift();
+    try {
+      await saveCalibrationResult(item.data);
+      const statsEntry = item.runId ? runStats.get(item.runId) : null;
+      if (statsEntry) {
+        statsEntry.synced += 1;
+        console.log(`Synced ${statsEntry.synced}/${statsEntry.total} results to Firebase \u2705`);
+        if (statsEntry.synced >= statsEntry.total) {
+          runStats.delete(item.runId);
+        }
+      } else if (item.total) {
+        const count = item.index ?? 1;
+        console.log(`Synced ${count}/${item.total} results to Firebase \u2705`);
+      } else {
+        console.log("Synced calibration result to Firebase \u2705");
+      }
+    } catch (err) {
+      console.warn("Calibration sync failed", err);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  syncActive = false;
+  if (syncQueue.length) {
+    scheduleFlush();
+  }
+}
+
 
 runBtn?.addEventListener("click", async () => {
   const files = Array.from(filesInp?.files || []);
@@ -126,56 +189,68 @@ async function runWithWorker(files) {
 
   await ensureWorkerReady();
 
-  const runId = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const runId = `worker-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  registerRun(runId, total);
 
-  await new Promise((resolve) => {
-    let completed = 0;
-    const handleMessage = (event) => {
-      const { type, payload } = event.data || {};
-      if (!payload || payload.runId !== runId) {
-        return;
-      }
-      if (type === "classified") {
-        completed += 1;
-        prog.textContent = `(${completed}/${total})`;
-        if (payload.res) {
-          addRow(payload.name, payload.dataURL, payload.res);
+  try {
+    await new Promise((resolve) => {
+      let completed = 0;
+      const handleMessage = (event) => {
+        const { type, payload } = event.data || {};
+        if (!payload || payload.runId !== runId) {
+          return;
         }
-        if (completed === total) {
-          worker.removeEventListener("message", handleMessage);
-          resolve();
+        if (type === "classified") {
+          completed += 1;
+          prog.textContent = `(${completed}/${total})`;
+          if (payload.res) {
+            const timestamp = new Date().toISOString();
+            addRow(payload.name, payload.dataURL, payload.res, {
+              runId,
+              total,
+              index: completed,
+              timestamp,
+            });
+          }
+          if (completed === total) {
+            worker.removeEventListener("message", handleMessage);
+            resolve();
+          }
+        } else if (type === "error") {
+          completed += 1;
+          console.error("Worker classification error", payload.message);
+          if (completed === total) {
+            worker.removeEventListener("message", handleMessage);
+            resolve();
+          }
         }
-      } else if (type === "error") {
-        completed += 1;
-        console.error("Worker classification error", payload.message);
-        if (completed === total) {
-          worker.removeEventListener("message", handleMessage);
-          resolve();
-        }
-      }
-    };
+      };
 
-    worker.addEventListener("message", handleMessage);
+      worker.addEventListener("message", handleMessage);
 
-    inputs.forEach((job, index) => {
-      const buffer = job.bytes.buffer;
-      worker.postMessage(
-        {
-          type: "classify",
-          payload: {
-            runId,
-            index,
-            width: job.width,
-            height: job.height,
-            dataURL: job.dataURL,
-            name: job.name,
-            buffer,
+      inputs.forEach((job, index) => {
+        const buffer = job.bytes.buffer;
+        worker.postMessage(
+          {
+            type: "classify",
+            payload: {
+              runId,
+              index,
+              width: job.width,
+              height: job.height,
+              dataURL: job.dataURL,
+              name: job.name,
+              buffer,
+            },
           },
-        },
-        [buffer],
-      );
+          [buffer],
+        );
+      });
     });
-  });
+  } catch (err) {
+    runStats.delete(runId);
+    throw err;
+  }
 }
 
 async function runOnMainThread(files) {
@@ -183,18 +258,32 @@ async function runOnMainThread(files) {
   await window.loadCV?.();
 
   const max = Math.min(files.length, 15);
+  if (!max) {
+    return;
+  }
+
+  const runId = `fallback-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  registerRun(runId, max);
+
   for (let i = 0; i < max; i += 1) {
     const file = files[i];
     const { canvas, dataURL } = await fileToCanvas(file, 640);
     prog.textContent = `(${i + 1}/${max})`;
     await new Promise((resolve) => setTimeout(resolve, 0));
     const res = await classifyImageCV(canvas);
-    addRow(file.name, dataURL, { ...res, img_w: canvas.width, img_h: canvas.height });
+    const enriched = { ...res, img_w: canvas.width, img_h: canvas.height };
+    const timestamp = new Date().toISOString();
+    addRow(file.name, dataURL, enriched, {
+      runId,
+      total: max,
+      index: i + 1,
+      timestamp,
+    });
     await new Promise((resolve) => setTimeout(resolve, 35));
   }
 }
 
-function addRow(name, dataURL, res = {}) {
+function addRow(name, dataURL, res = {}, context = {}) {
   const row = {
     file: name,
     area_px: res.area_px ?? "",
@@ -207,6 +296,26 @@ function addRow(name, dataURL, res = {}) {
     img_h: res.img_h ?? "",
   };
   rows.push(row);
+
+  const syncPayload = {
+    fileName: name,
+    area_px: res.area_px ?? null,
+    score: res.score ?? null,
+    severity: res.severity ?? null,
+    meanDark: res.meanDark ?? null,
+    edgeCount: res.edgeCount ?? null,
+    img_w: res.img_w ?? null,
+    img_h: res.img_h ?? null,
+    timestamp: context.timestamp || new Date().toISOString(),
+    runId: context.runId || null,
+  };
+
+  enqueueSync({
+    runId: context.runId || null,
+    total: context.total || null,
+    index: context.index || null,
+    data: syncPayload,
+  });
 
   const card = document.createElement("div");
   card.className = "card";

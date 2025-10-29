@@ -48,6 +48,26 @@ export async function listPacks(channel, lim = 50) {
   return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
 }
 
+export async function saveCalibrationResult(record) {
+  const db = ensureDb();
+  const docRef = doc(collection(db, "calibrations"));
+  const payload = {
+    fileName: record.fileName ?? null,
+    area_px: record.area_px ?? null,
+    score: record.score ?? null,
+    severity: record.severity ?? null,
+    meanDark: record.meanDark ?? null,
+    edgeCount: record.edgeCount ?? null,
+    img_w: record.img_w ?? null,
+    img_h: record.img_h ?? null,
+    timestamp: record.timestamp ?? new Date().toISOString(),
+    runId: record.runId ?? null,
+    createdAt: serverTimestamp(),
+  };
+  await setDoc(docRef, payload);
+  return docRef.id;
+}
+
 function ensureDb() {
   if (dbInstance) {
     return dbInstance;
